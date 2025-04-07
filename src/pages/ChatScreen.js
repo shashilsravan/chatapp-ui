@@ -1,9 +1,25 @@
 import React, { useEffect, useRef, useState } from 'react'
 import apiClient from '../services/bankingApi';
-import { v4 } from 'uuid';
 import { objectDeepCloneFlatted } from '../helper';
 
-const sessionid = v4();
+function formatVariableName(name) {
+    if (!name) {
+      return '';
+    }
+    
+    // Handle camelCase and PascalCase
+    let result = name.replace(/([a-z])([A-Z])/g, '$1 $2');
+    
+    // Replace underscores and hyphens with spaces
+    result = result.replace(/[_-]/g, ' ');
+    
+    // Remove extra spaces
+    result = result.replace(/\s+/g, ' ').trim();
+    
+    // Capitalize first letter, rest lowercase
+    return result.charAt(0).toUpperCase() + result.slice(1).toLowerCase();
+}
+const unmaskedFields = ["consent", "otp", "name_as_per_pan", "date_of_birth", "username", "email", "amount", "receiver_customer_Id", "n"]
 
 export default function ChatScreen() {
     const [loading, setLoading] = useState(false)
@@ -12,6 +28,9 @@ export default function ChatScreen() {
     const [backupCurrSeq, setBackupCurrSeq] = useState(null)
     const [currSeq, setCurrSeq] = useState(null)
     const [userInpWindow, setUserInpWindow] = useState(false);
+    const [sessionId, setSessionid] = useState('');
+    const [loggedIn, setLoggedIn] = useState(false);
+    const [query, setQuery] = useState("");
 
     // Function to scroll to the bottom of chat
     const scrollToBottom = () => {
@@ -26,7 +45,7 @@ export default function ChatScreen() {
         try {
             const { data } = await apiClient.post(`/conversation/start`, {}, {
                 headers: {
-                    'Content-Type': 'application/json', sessionid
+                    'Content-Type': 'application/json',
                 }
             })
 
@@ -34,6 +53,8 @@ export default function ChatScreen() {
                 content: data.prompt || "",
                 options: data.options || [] 
             }
+
+            setSessionid(data.sessionId)
             setCurrSeq(objectDeepCloneFlatted(transformedObj));
             setChats((prev) => ([
                 ...prev,
@@ -45,6 +66,48 @@ export default function ChatScreen() {
         } catch (error) {
             console.log('error', error)
         }
+    }
+
+    const callCustomAPI = async (query) => {
+        const { data } = await apiClient.post(`/conversation/query`,
+            { query, sessionId },
+            { headers: { 'Content-Type': 'application/json', }}
+        )
+
+        const transformedObj = {
+            content: data.meta.prompt || "",
+            options: data.meta.options || [] 
+        }
+        setCurrSeq(objectDeepCloneFlatted(transformedObj));
+
+        setChats((prev) => ([
+            ...prev, {
+                "role": "developer",
+                ...transformedObj
+            }
+        ]))
+
+        if (data.meta.action) {
+            handleOptionClick(data.meta)
+        } else {
+            setLoading(false)
+        }
+    }
+
+    const executeCustom = () => {
+        let currQ = query;
+        setChats((prev) => ([
+            ...prev, {
+                role: "user",
+                content: query
+            }
+        ]))
+        setQuery("");
+
+        setLoading(true);
+        setTimeout(() => {
+            callCustomAPI(currQ)
+        }, 700);
     }
 
     const handleUserResponse = (op) => {
@@ -64,8 +127,8 @@ export default function ChatScreen() {
         try {
             if (op.action) {
                 const { data } = await apiClient.post(`/workflow/variables`,
-                    { actionId: op.action },
-                    { headers: { 'Content-Type': 'application/json', sessionid }}
+                    { actionId: op.action, sessionId },
+                    { headers: { 'Content-Type': 'application/json', }}
                 )
 
                 if (data.prompt && data.meta) {
@@ -81,8 +144,8 @@ export default function ChatScreen() {
                 }
             } else {
                 const { data } = await apiClient.post(`/conversation/input`,
-                    { userInput: op.label },
-                    { headers: { 'Content-Type': 'application/json', sessionid }}
+                    { userInput: op.label, sessionId },
+                    { headers: { 'Content-Type': 'application/json', }}
                 )
                 const transformedObj = {
                     content: data.prompt || "",
@@ -118,34 +181,38 @@ export default function ChatScreen() {
         setCurrSeq(objectDeepCloneFlatted(temp));
     }
 
-    console.log('chats', chats)
-
     const callWorkflow = async (_resp = null) => {
         let data = {};
         if (_resp) {
             data = objectDeepCloneFlatted(_resp);
         } else {
             const { data: tempData } = await apiClient.post(`/workflow/execute`,
-                objectDeepCloneFlatted(currSeq),
-                { headers: { 'Content-Type': 'application/json', sessionid }}
+                {...objectDeepCloneFlatted(currSeq), sessionId},
+                { headers: { 'Content-Type': 'application/json', }}
             )
+
+            if (currSeq.actionId === "userLogin") setLoggedIn(true);
             data = tempData;
-            console.log('tempData', tempData);
         }
-        console.log('data', data)
 
         const transformedObj = {
             content: data.prompt || "",
             options: data.options || [] 
         }
         setCurrSeq(objectDeepCloneFlatted(transformedObj));
-        setChats((prev) => ([
-            ...prev,
-            {
+
+        if (data.error) {
+            setChats((prev) => ([...prev, {
+                "role": "developer",
+                "content": data.error,
+                type: "error"
+            }]));
+        } else {
+            setChats((prev) => ([...prev, {
                 "role": "developer",
                 ...transformedObj
-            }
-        ]))
+            }]));
+        }
 
         if (data && data.meta) {
             setTimeout(() => {
@@ -178,9 +245,10 @@ export default function ChatScreen() {
         const arr = [];
         Object.keys(temp.variables).forEach((key, i) => {
             if (!backupCurrSeq.variables[key].value) {
+                const vall = temp.variables[key].value
                 arr.push({
                     role: "user",
-                    content: `${key}: ${temp.variables[key].value}`
+                    content: `${formatVariableName(key)}: ${unmaskedFields.includes(key) ? vall : "x".repeat(vall.length)}`
                 })
             }
         })
@@ -224,12 +292,18 @@ export default function ChatScreen() {
                         {chats.map((each, i) => {
                             return (
                                 <>
-                                <div class={`message ${each.role}-message`}>
-                                    <p className='fs-13px' dangerouslySetInnerHTML={{ __html: each.content }} />
+                                <div class={`message ${each.role}-message ${each.type || ""}`}>
+                                    <p className='fs-13px' dangerouslySetInnerHTML={{ __html: `${each.type === "error" ? "ⓘ " : ""}${each.content}` }} />
                                 </div>
                                 {(each.options && each.options.length > 0)
                                     ? <div className="d-flex flex-wrap messages-container" style={{ gap: 12 }}>
-                                        {each.options.map((op) => (<div className="option-styling" onClick={() => handleUserResponse(op)}>
+                                        {each.options.map((op) => (<div className="option-styling" onClick={() => {
+                                            if (loggedIn) {
+                                                setQuery(op.label)
+                                            } else {
+                                                handleUserResponse(op)
+                                            }
+                                        }}>
                                             <p className="fs-12px">{op.label}</p>
                                         </div>))}
                                     </div>
@@ -255,8 +329,15 @@ export default function ChatScreen() {
                                         return (
                                             <div key={eachKey} className="d-flex flex-column" style={{ gap: 4, width: "90%" }}>
                                                 <p className="fs-14px fw-500">{val.key}</p>
-                                                <input value={val.value}
-                                                    onChange={(e) => handleChange(eachKey, e.target.value)} className="form-control" placeholder={val.description || `Enter ${val.key}`} />
+                                                <input autocomplete="new-password" value={val.value}
+                                                    type={unmaskedFields.includes(eachKey) ? "text" : "password"}
+                                                    onChange={(e) => handleChange(eachKey, e.target.value)}
+                                                    onKeyDown={(e) => {
+                                                        if (e.key === 'Enter') {
+                                                            callWorkflowMiddleware();
+                                                        }
+                                                    }}
+                                                    className="form-control" placeholder={val.description || `Enter ${val.key}`} />
                                             </div>
                                         )
                                     })
@@ -272,12 +353,16 @@ export default function ChatScreen() {
                         </div>}
                         <div ref={chatEndRef} />
                     </div>
-                    {/* <div className='w-100 chatInput' style={{ height: 96 }}>
-                        <textarea disabled={ true } className="h-100 w-100 form-control" placeholder='Type a message...' />
-                        <div className='btn bg-primary sendBtn'>
+                    <div className='w-100 chatInput' style={{ height: 96 }}>
+                        <textarea value={query} onKeyDown={(e) => {
+                            if (e.key === 'Enter' && loggedIn) {
+                                executeCustom();
+                            }
+                        }} onChange={(e) => setQuery(e.target.value)} disabled={!loggedIn} className="h-100 w-100 form-control" placeholder='Type a message...' />
+                        {(loggedIn && query) && <div className='btn bg-primary sendBtn' onClick={executeCustom}>
                             <i className="fs-12px fa-solid text-white fa-paper-plane"></i>
-                        </div>
-                    </div> */}
+                        </div>}
+                    </div>
                 </div>
             </div>
         </div>

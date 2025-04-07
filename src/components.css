@@ -107,6 +107,9 @@
     margin-top: 8px;
     margin-bottom: 4px;
 }
+.developer-message.error{
+    color: #b22222 !important;
+}
 
 .user-message {
     align-self: flex-end;
