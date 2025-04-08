@@ -111,6 +111,34 @@
     color: #b22222 !important;
 }
 
+.developer-message table {
+    width: 100%;
+    margin: 12px 0;
+    border-collapse: collapse;
+    font-family: sans-serif;
+    font-size: 14px;
+    background-color: #fff;
+    border: 1px solid #e0e0e0;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+  }
+
+  .developer-message table th,
+  .developer-message table td {
+    text-align: left;
+    padding: 12px 16px;
+    border-bottom: 1px solid #f0f0f0;
+  }
+
+  .developer-message table th {
+    background-color: #fafafa;
+    color: #333;
+    font-weight: 600;
+  }
+
+  .developer-message table tbody tr:hover {
+    background-color: #f9f9f9;
+  }
+
 .user-message {
     align-self: flex-end;
     background-color: rgb(86, 139, 229);
@@ -197,7 +225,7 @@
     font-weight: 550;
 }
 .inputDialogBox .dialog-body{
-    padding: 16px;
+    padding: 16px 8px;
     background: white;
     border-bottom-right-radius: 4px;
     border-bottom-left-radius: 4px;

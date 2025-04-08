@@ -1,321 +1,425 @@
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import apiClient from '../services/bankingApi';
 import { objectDeepCloneFlatted } from '../helper';
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import { faBuildingColumns, faTicket, faPaperPlane } from '@fortawesome/free-solid-svg-icons';
 
 function formatVariableName(name) {
-    if (!name) {
-      return '';
-    }
-    
-    // Handle camelCase and PascalCase
+    if (!name) return '';
     let result = name.replace(/([a-z])([A-Z])/g, '$1 $2');
-    
-    // Replace underscores and hyphens with spaces
     result = result.replace(/[_-]/g, ' ');
-    
-    // Remove extra spaces
     result = result.replace(/\s+/g, ' ').trim();
-    
-    // Capitalize first letter, rest lowercase
     return result.charAt(0).toUpperCase() + result.slice(1).toLowerCase();
 }
-const unmaskedFields = ["consent", "otp", "name_as_per_pan", "date_of_birth", "username", "email", "amount", "receiver_customer_Id", "n"]
+
+const UNMASKED_FIELDS = [
+    "consent", "otp", "name_as_per_pan", "date_of_birth",
+    "username", "email", "amount", "receiver_customer_Id", "n"
+];
 
 export default function ChatScreen() {
-    const [loading, setLoading] = useState(false)
+    const [loading, setLoading] = useState(false);
     const [chats, setChats] = useState([]);
-    const chatEndRef = useRef(null);
-    const [backupCurrSeq, setBackupCurrSeq] = useState(null)
-    const [currSeq, setCurrSeq] = useState(null)
+    const [backupCurrSeq, setBackupCurrSeq] = useState(null);
+    const [currSeq, setCurrSeq] = useState(null);
     const [userInpWindow, setUserInpWindow] = useState(false);
-    const [sessionId, setSessionid] = useState('');
+    const [sessionId, setSessionId] = useState('');
     const [loggedIn, setLoggedIn] = useState(false);
     const [query, setQuery] = useState("");
+    const [error, setError] = useState(null);
 
-    // Function to scroll to the bottom of chat
-    const scrollToBottom = () => {
-        chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    };
+    const chatEndRef = useRef(null);
+    const textareaRef = useRef(null);
+
+    const scrollToBottom = useCallback(() => {
+        if (chatEndRef.current) {
+            chatEndRef.current.scrollIntoView({ behavior: 'smooth' });
+        }
+    }, []);
 
     useEffect(() => {
         scrollToBottom();
-      }, [chats, userInpWindow]);
+    }, [chats, userInpWindow, scrollToBottom]);
 
-      const startConversation = async () => {
+    useEffect(() => {
+        if (loggedIn && textareaRef.current) {
+            textareaRef.current.focus();
+        }
+    }, [loggedIn]);
+
+    const startConversation = useCallback(async () => {
         try {
+            setLoading(true);
             const { data } = await apiClient.post(`/conversation/start`, {}, {
                 headers: {
                     'Content-Type': 'application/json',
                 }
-            })
+            });
 
             const transformedObj = {
                 content: data.prompt || "",
-                options: data.options || [] 
-            }
+                options: data.options || []
+            };
 
-            setSessionid(data.sessionId)
+            setSessionId(data.sessionId);
             setCurrSeq(objectDeepCloneFlatted(transformedObj));
-            setChats((prev) => ([
-                ...prev,
-                {
-                    "role": "developer",
-                    ...transformedObj
-                }
-            ]))
-        } catch (error) {
-            console.log('error', error)
-        }
-    }
-
-    const callCustomAPI = async (query) => {
-        const { data } = await apiClient.post(`/conversation/query`,
-            { query, sessionId },
-            { headers: { 'Content-Type': 'application/json', }}
-        )
-
-        const transformedObj = {
-            content: data.meta.prompt || "",
-            options: data.meta.options || [] 
-        }
-        setCurrSeq(objectDeepCloneFlatted(transformedObj));
-
-        setChats((prev) => ([
-            ...prev, {
-                "role": "developer",
+            setChats([{
+                role: "developer",
                 ...transformedObj
-            }
-        ]))
-
-        if (data.meta.action) {
-            handleOptionClick(data.meta)
-        } else {
-            setLoading(false)
+            }]);
+            setLoading(false);
+        } catch (error) {
+            console.error('Failed to start conversation:', error);
+            setError('Failed to connect to the banking service. Please try again later.');
+            setLoading(false);
         }
-    }
+    }, []);
+
+    useEffect(() => {
+        startConversation();
+    }, [startConversation]);
+
+    const callCustomAPI = async (userQuery) => {
+        try {
+            const { data } = await apiClient.post(`/conversation/query`,
+                { query: userQuery, sessionId },
+                { headers: { 'Content-Type': 'application/json' } }
+            );
+
+            if (data && data.action){
+                setChats(prev => [...prev, {
+                    role: "developer",
+                    content: data.prompt || ""
+                }]);
+
+                setUserInpWindow(true);
+                const transformedObj = {
+                    action: data.action || "",
+                    variables: data.variables || {}
+                };
+                setBackupCurrSeq(objectDeepCloneFlatted(transformedObj));
+                setCurrSeq(objectDeepCloneFlatted(transformedObj));
+                setLoading(false);
+            } else {
+                const transformedObj = {
+                    content: data.meta.prompt || "",
+                    options: data.meta.options || []
+                };
+                setCurrSeq(objectDeepCloneFlatted(transformedObj));
+                setChats(prev => [...prev,
+                    {
+                        role: "developer",
+                        content: data.prompt,
+                    },
+                    {
+                        role: "developer",
+                        ...transformedObj
+                    }
+                ]);
+                if (data.meta.action) {
+                    handleOptionClick(data.meta);
+                } else {
+                    setLoading(false);
+                }
+            }
+        } catch (error) {
+            console.error('API query failed:', error);
+            setChats(prev => [...prev, {
+                role: "developer",
+                content: "Sorry, I couldn't process your request. Please try again.",
+                type: "error"
+            }]);
+            setLoading(false);
+        }
+    };
 
     const executeCustom = () => {
-        let currQ = query;
-        setChats((prev) => ([
-            ...prev, {
-                role: "user",
-                content: query
-            }
-        ]))
-        setQuery("");
+        if (!query.trim()) return;
 
-        setLoading(true);
-        setTimeout(() => {
-            callCustomAPI(currQ)
-        }, 700);
-    }
-
-    const handleUserResponse = (op) => {
+        const currentQuery = query;
         const _chats = objectDeepCloneFlatted(chats);
-        _chats[_chats.length - 1].options = null
+        _chats[_chats.length - 1].options = null;
         _chats.push({
             role: "user",
-            content: op.label
+            content: currentQuery
         })
-        setChats(objectDeepCloneFlatted(_chats))
+        setChats(objectDeepCloneFlatted(_chats));
+        setQuery("");
         setLoading(true);
+
         setTimeout(() => {
-            handleOptionClick(op)
+            callCustomAPI(currentQuery);
+        }, 700);
+    };
+
+    const handleUserResponse = (option) => {
+        const updatedChats = objectDeepCloneFlatted(chats);
+        if (updatedChats.length > 0) {
+            updatedChats[updatedChats.length - 1].options = null;
+        }
+        updatedChats.push({
+            role: "user",
+            content: option.label
+        });
+
+        setChats(updatedChats);
+        setLoading(true);
+
+        setTimeout(() => {
+            handleOptionClick(option);
         }, 600);
-    }
-    const handleOptionClick = async (op) => {
+    };
+    const handleOptionClick = async (option) => {
         try {
-            if (op.action) {
-                const { data } = await apiClient.post(`/workflow/variables`,
-                    { actionId: op.action, sessionId },
-                    { headers: { 'Content-Type': 'application/json', }}
-                )
+            if (option.action) {
+                const { data } = await apiClient.post(
+                    `/workflow/variables`,
+                    { actionId: option.action, sessionId },
+                    { headers: { 'Content-Type': 'application/json' } }
+                );
 
                 if (data.prompt && data.meta) {
-                    callWorkflow(data)
+                    callWorkflow(data);
                 } else {
                     setUserInpWindow(true);
                     const transformedObj = {
-                        actionId: data.actionId || "",
+                        action: data.action || "",
                         variables: data.variables || {}
-                    }
+                    };
                     setBackupCurrSeq(objectDeepCloneFlatted(transformedObj));
                     setCurrSeq(objectDeepCloneFlatted(transformedObj));
                 }
             } else {
-                const { data } = await apiClient.post(`/conversation/input`,
-                    { userInput: op.label, sessionId },
-                    { headers: { 'Content-Type': 'application/json', }}
-                )
+                const { data } = await apiClient.post(
+                    `/conversation/input`,
+                    { userInput: option.label, sessionId },
+                    { headers: { 'Content-Type': 'application/json' } }
+                );
+
                 const transformedObj = {
                     content: data.prompt || "",
-                    options: data.options || [] 
-                }
+                    options: data.options || []
+                };
 
                 setCurrSeq(objectDeepCloneFlatted(transformedObj));
-                setChats((prev) => ([
-                    ...prev,
-                    {
-                        "role": "developer",
-                        ...transformedObj
-                    }
-                ]))
+                setChats(prev => [...prev, {
+                    role: "developer",
+                    ...transformedObj
+                }]);
 
                 if (data.action) {
-                    handleOptionClick(data)
+                    handleOptionClick(data);
                 }
             }
-            setLoading(false)
+            setLoading(false);
         } catch (error) {
-            setLoading(false)
-        }
-    }
-
-    useEffect(() => {
-        startConversation()
-    }, [])
-    
-    const handleChange = (key, val) => {
-        const temp = objectDeepCloneFlatted(currSeq)
-        temp.variables[key].value = val;
-        setCurrSeq(objectDeepCloneFlatted(temp));
-    }
-
-    const callWorkflow = async (_resp = null) => {
-        let data = {};
-        if (_resp) {
-            data = objectDeepCloneFlatted(_resp);
-        } else {
-            const { data: tempData } = await apiClient.post(`/workflow/execute`,
-                {...objectDeepCloneFlatted(currSeq), sessionId},
-                { headers: { 'Content-Type': 'application/json', }}
-            )
-
-            if (currSeq.actionId === "userLogin") setLoggedIn(true);
-            data = tempData;
-        }
-
-        const transformedObj = {
-            content: data.prompt || "",
-            options: data.options || [] 
-        }
-        setCurrSeq(objectDeepCloneFlatted(transformedObj));
-
-        if (data.error) {
-            setChats((prev) => ([...prev, {
-                "role": "developer",
-                "content": data.error,
+            console.error('Option processing failed:', error);
+            setChats(prev => [...prev, {
+                role: "developer",
+                content: "Sorry, I couldn't process your selection. Please try again.",
                 type: "error"
-            }]));
-        } else {
-            setChats((prev) => ([...prev, {
-                "role": "developer",
-                ...transformedObj
-            }]));
-        }
-
-        if (data && data.meta) {
-            setTimeout(() => {
-                const transformedObj = {
-                    content: data.meta.prompt || "",
-                    options: data.meta.options || [] 
-                }
-                setCurrSeq(objectDeepCloneFlatted(transformedObj));
-
-                setChats((prev) => ([
-                    ...prev, {
-                        "role": "developer",
-                        ...transformedObj
-                    }
-                ]))
-
-                if (data.meta.action) {
-                    handleOptionClick(data.meta)
-                } else {
-                    setLoading(false)
-                }
-            }, 800);
-        } else {
+            }]);
             setLoading(false);
         }
-    }
+    };
+    const handleChange = (key, val) => {
+        const updatedSeq = objectDeepCloneFlatted(currSeq);
+        if (updatedSeq.variables && updatedSeq.variables[key]) {
+            updatedSeq.variables[key].value = val;
+            setCurrSeq(updatedSeq);
+        }
+    };
+    const callWorkflow = async (_resp = null) => {
+        try {
+            let data = {};
+            if (_resp) {
+                data = objectDeepCloneFlatted(_resp);
+            } else {
+                const { data: tempData } = await apiClient.post(
+                    `/workflow/execute`,
+                    { ...objectDeepCloneFlatted(currSeq), sessionId },
+                    { headers: { 'Content-Type': 'application/json' } }
+                );
+
+                if (currSeq.action === "userLogin") {
+                    setLoggedIn(true);
+                }
+                data = tempData;
+            }
+
+            const transformedObj = {
+                content: data.prompt || "",
+                options: data.options || []
+            };
+
+            setCurrSeq(objectDeepCloneFlatted(transformedObj));
+
+            if (data.error) {
+                setChats(prev => [...prev, {
+                    role: "developer",
+                    content: data.error,
+                    type: "error"
+                }]);
+            } else {
+                setChats(prev => [...prev, {
+                    role: "developer",
+                    ...transformedObj
+                }]);
+            }
+
+            if (data && data.meta) {
+                setTimeout(() => {
+                    const nextObj = {
+                        content: data.meta.prompt || "",
+                        options: data.meta.options || []
+                    };
+
+                    setCurrSeq(objectDeepCloneFlatted(nextObj));
+                    setChats(prev => [...prev, {
+                        role: "developer",
+                        ...nextObj
+                    }]);
+
+                    if (data.meta.action) {
+                        handleOptionClick(data.meta);
+                    } else {
+                        setLoading(false);
+                    }
+                }, 800);
+            } else {
+                setLoading(false);
+            }
+        } catch (error) {
+            console.error('Workflow execution failed:', error);
+            setChats(prev => [...prev, {
+                role: "developer",
+                content: "There was an error processing your request. Please try again.",
+                type: "error"
+            }]);
+            setLoading(false);
+        }
+    };
 
     const callWorkflowMiddleware = () => {
-        const temp = objectDeepCloneFlatted(currSeq)
-        const arr = [];
-        Object.keys(temp.variables).forEach((key, i) => {
-            if (!backupCurrSeq.variables[key].value) {
-                const vall = temp.variables[key].value
-                arr.push({
-                    role: "user",
-                    content: `${formatVariableName(key)}: ${unmaskedFields.includes(key) ? vall : "x".repeat(vall.length)}`
-                })
-            }
-        })
+        const missingRequiredFields = Object.entries(currSeq.variables || {})
+            .filter(([key, value]) => !value.value && value.required)
+            .map(([key]) => formatVariableName(key));
 
-        setChats((prev) => [...prev, ...arr])
+        if (missingRequiredFields.length > 0) {
+            alert(`Please fill in all required fields: ${missingRequiredFields.join(', ')}`);
+            return;
+        }
+
+        const temp = objectDeepCloneFlatted(currSeq);
+        const formInputs = [];
+
+        Object.keys(temp.variables || {}).forEach(key => {
+            if (!backupCurrSeq.variables[key].value) {
+                const value = temp.variables[key].value;
+                if (value) {
+                    formInputs.push({
+                        role: "user",
+                        content: `${formatVariableName(key)}: ${UNMASKED_FIELDS.includes(key) ? value : "•".repeat(Math.min(value.length, 10))}`
+                    });
+                }
+            }
+        });
+
+        setChats(prev => [...prev, ...formInputs]);
         setLoading(true);
         setUserInpWindow(false);
 
         setTimeout(() => {
-            callWorkflow()
+            callWorkflow();
         }, 600);
-    }
-        
+    };
+
+    const handleKeyPress = (e) => {
+        if (e.key === 'Enter' && !e.shiftKey && loggedIn) {
+            e.preventDefault();
+            executeCustom();
+        }
+    };
+
+    const resetConversation = () => {
+        if (window.confirm('Are you sure you want to start a new conversation? This will reset all previous messages.')) {
+            setChats([]);
+            setLoading(false);
+            setUserInpWindow(false);
+            setLoggedIn(false);
+            setQuery("");
+            startConversation();
+        }
+    };
 
     return (
-        <div className="h-100 container p-0 chatContainer">
-            <div className='w-100 h-100 p-0 d-flex align-items-center'>
-                <div className="h-100 chatLeftSection p-4" style={{ width: "25%" }}>
-                    <div>
-                        <i style={{ fontSize: 28 }} className="fa-solid fa-building-columns"></i>
-                        <p className='fs-18px fw-600 mt-2'>Banking Queries</p>
-                        <div className='d-flex align-items-center mb-3' style={{ gap: 8 }}>
-                            <p className='fs-12px fs-italic'>28 Prompts</p>
-                            <p className='fs-12px fs-italic'>|</p>
-                            <p className='fs-12px fs-italic'>6 Workflows</p>
+        <div className="container p-0 chatContainer h-100">
+            <div className="d-flex h-100 p-0">
+                <div className="chatLeftSection p-4" style={{ width: "25%" }}>
+                    <div className="sidebar-header mb-4">
+                        <div className="d-flex align-items-center mb-2">
+                            <FontAwesomeIcon icon={faBuildingColumns} className="me-2" style={{ fontSize: 28 }} />
+                            <h4 className="mb-0 fs-5 fw-semibold">Banking Assistant</h4>
                         </div>
-                        <p className='fs-13px fs-secondary'>
-                            Use this Co-Pilot to do any activities like creating a bank account, completing virtual KYC, checking aadhar or pan verification status and more ...
+
+                        <p className="small text-secondary">
+                            Use this banking assistant to create accounts, complete KYC verification, check account status,
+                            transfer funds, and manage your banking needs securely.
                         </p>
+
+                        <hr />
+
+                        <div className="d-flex align-items-center mt-3 mb-3" style={{ gap: 8 }}>
+                            <span className="badge bg-light text-dark">28 Prompts</span>
+                            <span className="badge bg-light text-dark">6 Workflows</span>
+                        </div>
+
                     </div>
 
-                    <div className="bg-primary btn d-flex align-items-center justify-content-center" style={{ gap: 8 }}>
-                        <i className="fs-12px text-white fa-solid fa-ticket"></i>
-                        <p className="text-white fs-14px">
-                            Raise a Ticket
-                        </p>
-                    </div>
+                    <button
+                        className="btn bg-primary d-flex align-items-center justify-content-center w-100"
+                        onClick={resetConversation}
+                    >
+                        <FontAwesomeIcon icon={faTicket} className="text-white me-2" />
+                        <span className='text-white'>New Conversation</span>
+                    </button>
                 </div>
-                <div className="h-100 chatsSection p-3" style={{ width: "75%" }}>
-                    <div className='overflow-scroll chatsContent' style={{ height: `calc(100% - 96px)` }}>
+
+                <div className="chatsSection p-3 d-flex flex-column" style={{ width: "75%" }}>
+                    {error && (
+                        <div className="alert alert-danger alert-dismissible fade show fs-12px" role="alert">
+                            {error}
+                            <button type="button" className="btn-close" onClick={() => setError(null)}></button>
+                        </div>
+                    )}
+
+                    <div className="overflow-auto chatsContent mb-3 w-100" style={{ height: "calc(100% - 96px)" }}>
                         {chats.map((each, i) => {
                             return (
-                                <>
-                                <div class={`message ${each.role}-message ${each.type || ""}`}>
-                                    <p className='fs-13px' dangerouslySetInnerHTML={{ __html: `${each.type === "error" ? "ⓘ " : ""}${each.content}` }} />
-                                </div>
-                                {(each.options && each.options.length > 0)
-                                    ? <div className="d-flex flex-wrap messages-container" style={{ gap: 12 }}>
-                                        {each.options.map((op) => (<div className="option-styling" onClick={() => {
-                                            if (loggedIn) {
-                                                setQuery(op.label)
-                                            } else {
-                                                handleUserResponse(op)
-                                            }
-                                        }}>
-                                            <p className="fs-12px">{op.label}</p>
-                                        </div>))}
+                                <React.Fragment key={i}>
+                                    <div class={`message ${each.role}-message ${each.type || ""}`}>
+                                        <p className='fs-13px' dangerouslySetInnerHTML={{ __html: `${each.type === "error" ? "ⓘ " : ""}${each.content}` }} />
                                     </div>
-                                    : null}
-                                </>
+                                    {(each.options && each.options.length > 0)
+                                        ? <div className="d-flex flex-wrap messages-container" style={{ gap: 12 }}>
+                                            {each.options.map((op) => (<div className="option-styling" onClick={() => handleUserResponse(op)}>
+                                                <p className="fs-12px">{op.label}</p>
+                                            </div>))}
+                                        </div>
+                                        : null}
+                                </React.Fragment>
                             )
                         })}
-                        {loading && <div class="typing-indicator">
-                            <span></span>
-                            <span></span>
-                            <span></span>
-                        </div>}
+
+
+                        {loading && (
+                            <div className="typing-indicator mb-3">
+                                <span></span>
+                                <span></span>
+                                <span></span>
+                            </div>
+                        )}
+
                         {userInpWindow && <div className="inputDialogBox">
                             <div className="w-100 dialog-heading">
                                 <p className='fs-14px'>Enter the below details</p>
@@ -330,7 +434,7 @@ export default function ChatScreen() {
                                             <div key={eachKey} className="d-flex flex-column" style={{ gap: 4, width: "90%" }}>
                                                 <p className="fs-14px fw-500">{val.key}</p>
                                                 <input autocomplete="new-password" value={val.value}
-                                                    type={unmaskedFields.includes(eachKey) ? "text" : "password"}
+                                                    type={UNMASKED_FIELDS.includes(eachKey) ? "text" : "password"}
                                                     onChange={(e) => handleChange(eachKey, e.target.value)}
                                                     onKeyDown={(e) => {
                                                         if (e.key === 'Enter') {
@@ -351,20 +455,28 @@ export default function ChatScreen() {
                                 </div>
                             </div>
                         </div>}
+
                         <div ref={chatEndRef} />
                     </div>
-                    <div className='w-100 chatInput' style={{ height: 96 }}>
-                        <textarea value={query} onKeyDown={(e) => {
-                            if (e.key === 'Enter' && loggedIn) {
-                                executeCustom();
-                            }
-                        }} onChange={(e) => setQuery(e.target.value)} disabled={!loggedIn} className="h-100 w-100 form-control" placeholder='Type a message...' />
-                        {(loggedIn && query) && <div className='btn bg-primary sendBtn' onClick={executeCustom}>
+
+                    <div className="chatInput position-relative">
+                        <textarea
+                            ref={textareaRef}
+                            value={query}
+                            onChange={(e) => setQuery(e.target.value)}
+                            onKeyDown={handleKeyPress}
+                            disabled={!loggedIn || loading}
+                            className="form-control py-2 pe-5"
+                            placeholder={loggedIn ? 'Type your message...' : 'Login to chat...'}
+                            rows="3"
+                            style={{ resize: "none" }}
+                        />
+                        {(loggedIn && query.trim()) && <div className='btn bg-primary sendBtn' onClick={executeCustom}>
                             <i className="fs-12px fa-solid text-white fa-paper-plane"></i>
                         </div>}
                     </div>
                 </div>
             </div>
         </div>
-    )
+    );
 }
