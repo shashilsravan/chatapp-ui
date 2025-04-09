@@ -3,8 +3,11 @@
   "version": "0.1.0",
   "private": true,
   "dependencies": {
+    "@fortawesome/fontawesome-svg-core": "^6.7.2",
     "@fortawesome/free-solid-svg-icons": "^6.7.2",
     "@fortawesome/react-fontawesome": "^0.2.2",
+    "@isaacs/cliui": "^8.0.2",
+    "@phosphor-icons/react": "^2.1.7",
     "@testing-library/dom": "^10.4.0",
     "@testing-library/jest-dom": "^6.6.3",
     "@testing-library/react": "^16.2.0",
@@ -15,6 +18,8 @@
     "react-dom": "^19.1.0",
     "react-router": "^7.4.1",
     "react-scripts": "5.0.1",
+    "sass": "^1.86.3",
+    "string-width-cjs": "^5.1.1",
     "web-vitals": "^2.1.4"
   },
   "scripts": {
