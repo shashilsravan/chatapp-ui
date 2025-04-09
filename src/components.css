@@ -127,6 +127,7 @@
 
   .developer-message table th,
   .developer-message table td {
+    font-size: 13px;
     text-align: left;
     padding: 12px 16px;
     border-bottom: 1px solid #f0f0f0;
@@ -267,7 +268,7 @@
 }
 .iconButton{
     height: 36px;
-    width: 44px;
+    width: 36px;
     display: flex;
     border-radius: 4px;
     align-items: center;

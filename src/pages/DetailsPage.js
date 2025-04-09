@@ -105,7 +105,7 @@ const DetailsPage = () => {
 
             <div className="chatBoxContainer" 
                 style={clicked.title 
-                    ? { opacity: 1, visibility: "visible", height: "80%", width: "50%" } 
+                    ? { opacity: 1, visibility: "visible", height: "80%", width: "60%" } 
                     : { opacity: 0, visibility: "hidden", height: 0, width: 0 }}
             >
                 <div className="chatBoxContainer--header px-3">

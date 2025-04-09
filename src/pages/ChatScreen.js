@@ -100,7 +100,7 @@ export default function ChatScreen() {
                 setBackupCurrSeq(objectDeepCloneFlatted(transformedObj));
                 setCurrSeq(objectDeepCloneFlatted(transformedObj));
                 setLoading(false);
-            } else {
+            } else if (data.meta) {
                 const transformedObj = {
                     content: data.meta.prompt || "",
                     options: data.meta.options || []
@@ -121,6 +121,13 @@ export default function ChatScreen() {
                 } else {
                     setLoading(false);
                 }
+            } else {
+                setChats(prev => [...prev, {
+                    role: "developer",
+                    content: data.prompt || "",
+                    options: data.options || [],
+                }]);
+                setLoading(false);
             }
         } catch (error) {
             console.error('API query failed:', error);
