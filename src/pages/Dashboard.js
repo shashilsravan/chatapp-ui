@@ -40,7 +40,7 @@ const Dashboard = () => {
                     <div className="text-white fw-600 orbitron-family" style={{ fontSize: "44px" }}>Empowering Your <br/> Financial Dreams <br /> Start Here</div>
                     <div className="mt-22px fs-14px text-white fw-400">Welcome to a world of financial possibilities. We're here to empower  your dreams <br /> and your future </div>
                     <div className="mt-32px d-flex align-items-center gap-16px">
-                        <div className="d-flex align-items-center justify-content-center fs-12px fw-400" style={{ height: "50px", width: "150px", backgroundColor: "#14c5cb" }}>
+                        <div className="d-flex align-items-center justify-content-center fs-12px fw-500" style={{ height: "50px", width: "150px", backgroundColor: "#14c5cb" }}>
                             Get Started
                         </div>
                         <div className="d-flex align-items-center gap-8px">
