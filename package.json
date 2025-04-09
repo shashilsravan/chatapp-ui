@@ -18,6 +18,7 @@
     "react-dom": "^19.1.0",
     "react-router": "^7.4.1",
     "react-scripts": "5.0.1",
+    "react-split": "^2.0.14",
     "sass": "^1.86.3",
     "string-width-cjs": "^5.1.1",
     "web-vitals": "^2.1.4"

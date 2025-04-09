@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
 import apiClient from '../services/bankingApi';
 import { objectDeepCloneFlatted } from '../helper';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faBuildingColumns, faTicket, faPaperPlane } from '@fortawesome/free-solid-svg-icons';
+import { faBuildingColumns, faTicket } from '@fortawesome/free-solid-svg-icons';
 
 function formatVariableName(name) {
     if (!name) return '';
@@ -353,130 +353,96 @@ export default function ChatScreen() {
     };
 
     return (
-        <div className="container p-0 chatContainer h-100">
-            <div className="d-flex h-100 p-0">
-                <div className="chatLeftSection p-4" style={{ width: "25%" }}>
-                    <div className="sidebar-header mb-4">
-                        <div className="d-flex align-items-center mb-2">
-                            <FontAwesomeIcon icon={faBuildingColumns} className="me-2" style={{ fontSize: 28 }} />
-                            <h4 className="mb-0 fs-5 fw-semibold">Banking Assistant</h4>
-                        </div>
-
-                        <p className="small text-secondary">
-                            Use this banking assistant to create accounts, complete KYC verification, check account status,
-                            transfer funds, and manage your banking needs securely.
-                        </p>
-
-                        <hr />
-
-                        <div className="d-flex align-items-center mt-3 mb-3" style={{ gap: 8 }}>
-                            <span className="badge bg-light text-dark">28 Prompts</span>
-                            <span className="badge bg-light text-dark">6 Workflows</span>
-                        </div>
-
-                    </div>
-
-                    <button
-                        className="btn bg-primary d-flex align-items-center justify-content-center w-100"
-                        onClick={resetConversation}
-                    >
-                        <FontAwesomeIcon icon={faTicket} className="text-white me-2" />
-                        <span className='text-white'>New Conversation</span>
-                    </button>
+        <div className="chatsSection p-3 d-flex flex-column w-100 h-100">
+            {error && (
+                <div className="alert alert-danger alert-dismissible fade show fs-12px" role="alert">
+                    {error}
+                    <button type="button" className="btn-close" onClick={() => setError(null)}></button>
                 </div>
+            )}
 
-                <div className="chatsSection p-3 d-flex flex-column" style={{ width: "75%" }}>
-                    {error && (
-                        <div className="alert alert-danger alert-dismissible fade show fs-12px" role="alert">
-                            {error}
-                            <button type="button" className="btn-close" onClick={() => setError(null)}></button>
-                        </div>
-                    )}
-
-                    <div className="overflow-auto chatsContent mb-3 w-100" style={{ height: "calc(100% - 96px)" }}>
-                        {chats.map((each, i) => {
-                            return (
-                                <React.Fragment key={i}>
-                                    <div class={`message ${each.role}-message ${each.type || ""}`}>
-                                        <p className='fs-13px' dangerouslySetInnerHTML={{ __html: `${each.type === "error" ? "ⓘ " : ""}${each.content}` }} />
-                                    </div>
-                                    {(each.options && each.options.length > 0)
-                                        ? <div className="d-flex flex-wrap messages-container" style={{ gap: 12 }}>
-                                            {each.options.map((op) => (<div className="option-styling" onClick={() => handleUserResponse(op)}>
-                                                <p className="fs-12px">{op.label}</p>
-                                            </div>))}
-                                        </div>
-                                        : null}
-                                </React.Fragment>
-                            )
-                        })}
-
-
-                        {loading && (
-                            <div className="typing-indicator mb-3">
-                                <span></span>
-                                <span></span>
-                                <span></span>
+            <div className="overflow-auto chatsContent mb-3 w-100" style={{ height: `calc(100% - ${loggedIn ? 96 : 50}px)` }}>
+                {chats.map((each, i) => {
+                    return (
+                        <React.Fragment key={i}>
+                            <div class={`message ${each.role}-message ${each.type || ""}`}>
+                                <p className='fs-13px' dangerouslySetInnerHTML={{ __html: `${each.type === "error" ? "ⓘ " : ""}${each.content}` }} />
                             </div>
-                        )}
-
-                        {userInpWindow && <div className="inputDialogBox">
-                            <div className="w-100 dialog-heading">
-                                <p className='fs-14px'>Enter the below details</p>
-                            </div>
-                            <div className="dialog-body w-100">
-                                {currSeq && currSeq.variables && Object.keys(currSeq.variables).length > 0 && (
-                                    Object.keys(currSeq.variables).map((eachKey) => {
-                                        const val = currSeq.variables[eachKey]
-                                        const actualVal = backupCurrSeq.variables[eachKey]
-                                        if (actualVal.value) return;
-                                        return (
-                                            <div key={eachKey} className="d-flex flex-column" style={{ gap: 4, width: "90%" }}>
-                                                <p className="fs-14px fw-500">{val.key}</p>
-                                                <input autocomplete="new-password" value={val.value}
-                                                    type={UNMASKED_FIELDS.includes(eachKey) ? "text" : "password"}
-                                                    onChange={(e) => handleChange(eachKey, e.target.value)}
-                                                    onKeyDown={(e) => {
-                                                        if (e.key === 'Enter') {
-                                                            callWorkflowMiddleware();
-                                                        }
-                                                    }}
-                                                    className="form-control" placeholder={val.description || `Enter ${val.key}`} />
-                                            </div>
-                                        )
-                                    })
-                                )}
-                                <div className="d-flex align-items-center justify-content-between w-100" style={{ paddingRight: 18 }}>
-                                    <div />
-                                    <div className="btn bg-primary d-flex align-items-center" style={{ gap: 6 }} onClick={callWorkflowMiddleware}>
-                                        <p className="fs-13px text-white">Send</p>
-                                        <i className="fs-12px fa-solid text-white fa-paper-plane"></i>
-                                    </div>
+                            {(each.options && each.options.length > 0)
+                                ? <div className="d-flex flex-wrap messages-container" style={{ gap: 12 }}>
+                                    {each.options.map((op) => (<div className="option-styling" onClick={() => handleUserResponse(op)}>
+                                        <p className="fs-12px">{op.label}</p>
+                                    </div>))}
                                 </div>
+                                : null}
+                        </React.Fragment>
+                    )
+                })}
+
+
+                {loading && (
+                    <div className="typing-indicator mb-3">
+                        <span></span>
+                        <span></span>
+                        <span></span>
+                    </div>
+                )}
+
+                {userInpWindow && <div className="inputDialogBox">
+                    <div className="w-100 dialog-heading">
+                        <p className='fs-14px'>Enter the below details</p>
+                    </div>
+                    <div className="dialog-body w-100">
+                        {currSeq && currSeq.variables && Object.keys(currSeq.variables).length > 0 && (
+                            Object.keys(currSeq.variables).map((eachKey) => {
+                                const val = currSeq.variables[eachKey]
+                                const actualVal = backupCurrSeq.variables[eachKey]
+                                if (actualVal.value) return;
+                                return (
+                                    <div key={eachKey} className="d-flex flex-column" style={{ gap: 4, width: "90%" }}>
+                                        <p className="fs-14px fw-500">{val.key}</p>
+                                        <input autocomplete="new-password" value={val.value}
+                                            type={UNMASKED_FIELDS.includes(eachKey) ? "text" : "password"}
+                                            onChange={(e) => handleChange(eachKey, e.target.value)}
+                                            onKeyDown={(e) => {
+                                                if (e.key === 'Enter') {
+                                                    callWorkflowMiddleware();
+                                                }
+                                            }}
+                                            className="form-control" placeholder={val.description || `Enter ${val.key}`} />
+                                    </div>
+                                )
+                            })
+                        )}
+                        <div className="d-flex align-items-center justify-content-between w-100" style={{ paddingRight: 18 }}>
+                            <div />
+                            <div className="btn bg-primary d-flex align-items-center" style={{ gap: 6 }} onClick={callWorkflowMiddleware}>
+                                <p className="fs-13px text-white">Send</p>
+                                <i className="fs-12px fa-solid text-white fa-paper-plane"></i>
                             </div>
-                        </div>}
-
-                        <div ref={chatEndRef} />
+                        </div>
                     </div>
+                </div>}
 
-                    <div className="chatInput position-relative">
-                        <textarea
-                            ref={textareaRef}
-                            value={query}
-                            onChange={(e) => setQuery(e.target.value)}
-                            onKeyDown={handleKeyPress}
-                            disabled={!loggedIn || loading}
-                            className="form-control py-2 pe-5"
-                            placeholder={loggedIn ? 'Type your message...' : 'Login to chat...'}
-                            rows="3"
-                            style={{ resize: "none" }}
-                        />
-                        {(loggedIn && query.trim()) && <div className='btn bg-primary sendBtn' onClick={executeCustom}>
-                            <i className="fs-12px fa-solid text-white fa-paper-plane"></i>
-                        </div>}
-                    </div>
-                </div>
+                <div ref={chatEndRef} />
             </div>
+
+            {loggedIn && <div className="chatInput position-relative">
+                <textarea
+                    ref={textareaRef}
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
+                    onKeyDown={handleKeyPress}
+                    disabled={!loggedIn || loading}
+                    className="form-control py-2 pe-5"
+                    placeholder='Type your message...'
+                    rows="3"
+                    style={{ resize: "none" }}
+                />
+                {(query.trim()) && <div className='btn bg-primary sendBtn' onClick={executeCustom}>
+                    <i className="fs-12px fa-solid text-white fa-paper-plane"></i>
+                </div>}
+            </div>}
         </div>
     );
 }

@@ -63,10 +63,13 @@
     justify-content: space-between;
 }
 .chatsSection{
+    background: white;
     padding: 8px 0px;
     display: flex;
     flex-direction: column;
     gap: 12px;
+    border-bottom-left-radius: 16px;
+    border-bottom-right-radius: 16px;
 }
 .chatsContent{
     display: flex;
@@ -214,7 +217,6 @@
     width: 400px;
     box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08),
     0 4px 12px rgba(0, 0, 0, 0.05);
-    margin-right: 12px;
 }
 .inputDialogBox .dialog-heading{
     padding: 12px;
@@ -237,4 +239,59 @@
 }
 .form-control::placeholder{
     font-size: 12px;
+}
+
+.position-absolute{
+    position: fixed;
+}
+
+.chatBoxContainer{
+    z-index: 4;
+    right: 30px;
+    background: white;
+    bottom: 88px;
+    transform-origin: right bottom;
+    transition: width 0.5s, height 0.3s, max-height 0.3s, transform 0.15s cubic-bezier(0, 1.2, 1, 1), opacity 0.5s ease-out;
+    position: fixed;
+    border-radius: 16px;
+    box-shadow: rgba(0, 0, 0, 0.16) 0px 5px 40px;
+}
+.chatBoxContainer .chatBoxContainer--header{
+    height: 64px;
+    width: 100%;
+    padding: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.2);
+}
+.iconButton{
+    height: 36px;
+    width: 44px;
+    display: flex;
+    border-radius: 4px;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 200ms ease-in-out;
+}
+.iconButton:hover{
+    background: #F4F7F8;
+}
+.triggerIcon{
+    position: fixed;
+    right: 30px;
+    bottom: 24px;
+    border-radius: 48px;
+    height: 48px;
+    width: 48px;
+    background: #1060E5;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.chatBodyContainer{
+    cursor: pointer;
+    border-bottom-left-radius: 16px;
+    border-bottom-right-radius: 16px;
 }

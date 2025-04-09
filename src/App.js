@@ -8,7 +8,7 @@ import Dashboard from "./pages/Dashboard";
 let router = createBrowserRouter([
     {
         path: "/",
-        Component: HomePage,
+        Component: Dashboard,
     },
     {
         path: "/pilot/:id",
